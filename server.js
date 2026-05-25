@@ -396,7 +396,7 @@ Song should end naturally after the final lyric.
     fs.writeFileSync(outputPath, Buffer.from(audioResponse.data));
 
     res.json({
-      songUrl: `http://localhost:${PORT}/renders/${filename}`,
+      songUrl: `/renders/${filename}`,
       remoteAudioUrl,
       provider: "kie",
       targetDuration,
@@ -523,7 +523,7 @@ if (!timedLyrics.length) {
     });
 
     res.json({
-      videoUrl: `http://localhost:${PORT}/renders/${fileName}`,
+      videoUrl: `/renders/${fileName}`,
     });
   } catch (error) {
     console.error("Video render error:");
