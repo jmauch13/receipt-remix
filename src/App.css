@@ -1,0 +1,550 @@
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  color: #ffffff;
+  background: #090910;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at top, rgba(255, 79, 184, 0.2), transparent 32%),
+    linear-gradient(180deg, #090910 0%, #11111b 100%);
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+}
+
+.mobileShell {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 14px;
+}
+
+.appFrame {
+  width: 100%;
+  max-width: 430px;
+  min-height: calc(100vh - 28px);
+  background: rgba(18, 18, 28, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 34px;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.topBar {
+  padding: 24px 22px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 900;
+  color: #ff4fb8;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0;
+  font-size: 28px;
+  letter-spacing: -0.04em;
+}
+
+h2 {
+  font-size: 28px;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  margin-bottom: 10px;
+}
+
+p {
+  color: #b7b7c8;
+  line-height: 1.5;
+}
+
+.sparkleBadge {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: rgba(255, 79, 184, 0.14);
+  color: #ff4fb8;
+  display: grid;
+  place-items: center;
+}
+
+.progressDots {
+  display: flex;
+  gap: 7px;
+  padding: 0 22px 18px;
+}
+
+.dot {
+  height: 6px;
+  flex: 1;
+  border-radius: 999px;
+  background: #2a2a38;
+}
+
+.dot.active {
+  background: #ff4fb8;
+}
+
+.screenWrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.screen {
+  padding: 0 22px 22px;
+  min-height: 100%;
+}
+
+.centerHero {
+  padding-top: 10px;
+  text-align: left;
+}
+
+.heroIcon {
+  width: 72px;
+  height: 72px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #ff4fb8, #9f6bff);
+  display: grid;
+  place-items: center;
+  color: #07070c;
+  margin-bottom: 20px;
+  box-shadow: 0 20px 40px rgba(255, 79, 184, 0.25);
+}
+
+.miniPreview {
+  margin-top: 24px;
+  background: #0c0c12;
+  border: 1px solid #2a2a39;
+  border-radius: 28px;
+  padding: 18px;
+  min-height: 250px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+}
+
+.miniBubble,
+.textBubble {
+  max-width: 82%;
+  padding: 12px 14px;
+  border-radius: 18px;
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.left {
+  align-self: flex-start;
+  background: #343445;
+  color: white;
+  border-bottom-left-radius: 6px;
+}
+
+.right {
+  align-self: flex-end;
+  background: #ff4fb8;
+  color: #08080d;
+  border-bottom-right-radius: 6px;
+}
+
+.miniLyric {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 18px;
+  line-height: 1.25;
+  font-weight: 950;
+}
+
+.screenTitle {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.screenTitle svg {
+  color: #ff4fb8;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.screenTitle h2 {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.screenTitle p {
+  margin-bottom: 0;
+  font-size: 14px;
+}
+
+textarea {
+  width: 100%;
+  min-height: 330px;
+  resize: none;
+  background: #0d0d15;
+  border: 1px solid #343445;
+  color: white;
+  border-radius: 24px;
+  padding: 18px;
+  outline: none;
+  line-height: 1.55;
+  font-size: 15px;
+}
+
+textarea:focus {
+  border-color: #ff4fb8;
+  box-shadow: 0 0 0 4px rgba(255, 79, 184, 0.12);
+}
+
+.hint {
+  font-size: 13px;
+  margin: 12px 2px 0;
+}
+
+.vibeGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.vibe {
+  min-height: 58px;
+  border-radius: 20px;
+  background: #242435;
+  color: white;
+  padding: 0 16px;
+  font-weight: 900;
+  text-align: left;
+}
+
+.vibe.active {
+  background: linear-gradient(135deg, #ff4fb8, #ff8fd2);
+  color: #08080d;
+  box-shadow: 0 18px 34px rgba(255, 79, 184, 0.18);
+}
+
+.selectedCard {
+  margin-top: 18px;
+  border-radius: 24px;
+  padding: 18px;
+  background: rgba(255, 79, 184, 0.1);
+  border: 1px solid rgba(255, 79, 184, 0.2);
+}
+
+.selectedCard p {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 900;
+  color: #ff8fd2;
+  margin-bottom: 6px;
+}
+
+.selectedCard strong {
+  font-size: 22px;
+}
+
+.primaryButton,
+.secondaryButton,
+.ghostButton,
+.navButton {
+  cursor: pointer;
+  border-radius: 999px;
+  font-weight: 950;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.primaryButton,
+.secondaryButton,
+.ghostButton {
+  width: 100%;
+  min-height: 54px;
+}
+
+.primaryButton {
+  background: #ff4fb8;
+  color: #08080d;
+}
+
+.secondaryButton {
+  background: #2a2a38;
+  color: #9f9fb4;
+}
+
+.ghostButton {
+  margin-top: 12px;
+  background: transparent;
+  color: #ff8fd2;
+  border: 1px solid rgba(255, 79, 184, 0.25);
+}
+
+.uploadButton {
+  width: 100%;
+  min-height: 54px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  background: rgba(255, 79, 184, 0.12);
+  border: 1px solid rgba(255, 79, 184, 0.28);
+  color: #ff8fd2;
+  font-weight: 950;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.uploadButton input {
+  display: none;
+}
+
+.lyricsBox {
+  white-space: pre-wrap;
+  background: #0d0d15;
+  border: 1px solid #343445;
+  border-radius: 24px;
+  padding: 18px;
+  color: white;
+  line-height: 1.55;
+  font-size: 14px;
+  max-height: 430px;
+  overflow: auto;
+}
+
+.phonePreview {
+  width: min(100%, 280px);
+  aspect-ratio: 9 / 16;
+  margin: 0 auto 18px;
+  background:
+    radial-gradient(circle at top, rgba(255, 79, 184, 0.22), transparent 35%),
+    linear-gradient(180deg, #14141c, #08080c);
+  border: 9px solid #050507;
+  border-radius: 38px;
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.statusPill {
+  align-self: center;
+  font-size: 11px;
+  font-weight: 950;
+  color: #ff8fd2;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 7px 12px;
+}
+
+.bubbleStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lyricCaption {
+  text-align: center;
+  font-size: 20px;
+  line-height: 1.16;
+  font-weight: 950;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.7);
+}
+
+.musicNote {
+  text-align: center;
+  color: #ff4fb8;
+  font-size: 26px;
+  font-weight: 950;
+}
+
+.bottomNav {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 10px;
+  background: rgba(12, 12, 18, 0.9);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.navButton {
+  min-height: 52px;
+}
+
+.navButton.primary {
+  background: #ff4fb8;
+  color: #08080d;
+}
+
+.navButton.secondary {
+  background: #242435;
+  color: white;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (min-width: 700px) {
+  .mobileShell {
+    align-items: center;
+    padding: 28px;
+  }
+
+  .appFrame {
+    min-height: 850px;
+    max-height: 900px;
+  }
+}
+
+.songCard {
+  background: #0d0d15;
+  border: 1px solid #343445;
+  border-radius: 28px;
+  padding: 18px;
+  margin-bottom: 18px;
+}
+
+.songLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 950;
+  color: #ff8fd2;
+  margin-bottom: 4px;
+}
+
+.songCard h3 {
+  margin: 0 0 14px;
+  font-size: 26px;
+  letter-spacing: -0.04em;
+}
+
+.songLyricPreview {
+  background: #151520;
+  border: 1px solid #2c2c3a;
+  border-radius: 22px;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  max-height: 170px;
+  overflow: auto;
+}
+
+.songLyricPreview span {
+  font-size: 14px;
+  line-height: 1.35;
+  color: #eeeeff;
+}
+
+.audioBox {
+  background: rgba(255, 79, 184, 0.1);
+  border: 1px solid rgba(255, 79, 184, 0.22);
+  border-radius: 22px;
+  padding: 14px;
+}
+
+.audioBox p {
+  margin-bottom: 10px;
+  color: white;
+  font-weight: 900;
+}
+
+.audioBox audio {
+  width: 100%;
+}
+
+.phonePreview.small {
+  width: min(100%, 235px);
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.downloadButton {
+  width: 100%;
+  min-height: 54px;
+  border-radius: 999px;
+  background: #ff4fb8;
+  color: #08080d;
+  font-weight: 950;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.screen {
+  padding-bottom: 120px;
+  overflow-y: auto;
+}
+
+.lyricsEditor {
+  width: 100%;
+  min-height: 430px;
+  resize: vertical;
+  background: #0d0d15;
+  border: 1px solid #343445;
+  color: white;
+  border-radius: 24px;
+  padding: 18px;
+  outline: none;
+  line-height: 1.55;
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+
+.lyricsEditor:focus {
+  border-color: #ff4fb8;
+  box-shadow: 0 0 0 4px rgba(255, 79, 184, 0.12);
+}
