@@ -12,7 +12,7 @@ import { getCompositions, renderMedia } from "@remotion/renderer";
 import axios from "axios";
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -535,13 +535,21 @@ app.post("/api/render-video", async (req, res) => {
     const fileName = `receipt-remix-${Date.now()}.mp4`;
     const outputLocation = path.join(rendersDir, fileName);
 
-    await renderMedia({
-      composition: renderComposition,
-      serveUrl: bundleLocation,
-      codec: "h264",
-      outputLocation,
-      inputProps,
-    });
+    console.log("Starting video render...");
+
+await renderMedia({
+  composition: renderComposition,
+  serveUrl: bundleLocation,
+  codec: "h264",
+  outputLocation,
+  inputProps,
+  concurrency: 1,
+  onProgress: ({ progress }) => {
+    console.log(`Render progress: ${Math.round(progress * 100)}%`);
+  },
+});
+
+console.log("Video render finished:", outputLocation);
 
     res.json({
       videoUrl: `/renders/${fileName}`,
