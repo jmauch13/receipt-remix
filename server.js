@@ -474,17 +474,32 @@ app.post("/api/render-video", async (req, res) => {
       return res.status(400).json({ error: "Missing lyrics" });
     }
 
-      const cleanLyrics = cleanLyricsForVideo(lyrics);
+    if (!audioUrl) {
+      return res.status(400).json({ error: "Missing audioUrl" });
+    }
 
-if (!timedLyrics.length) {
-  return res.status(400).json({
-    error: "Missing timed lyrics. Generate and transcribe the song first.",
-  });
-}
+    if (!timedLyrics.length) {
+      return res.status(400).json({
+        error: "Missing timed lyrics. Generate and transcribe the song first.",
+      });
+    }
+
+    const cleanLyrics = cleanLyricsForVideo(lyrics);
 
     const lastTimedLyric = timedLyrics[timedLyrics.length - 1];
 
-    const calculatedDurationInFrames = Math.ceil((lastTimedLyric.end + 1.5) * 30);
+    const calculatedDurationInFrames = Math.ceil(
+      (lastTimedLyric.end + 1.5) * 30
+    );
+
+    const BASE_URL =
+      process.env.NODE_ENV === "production"
+        ? "https://receipt-remix.onrender.com"
+        : `http://localhost:${PORT}`;
+
+    const fullAudioUrl = audioUrl.startsWith("http")
+      ? audioUrl
+      : `${BASE_URL}${audioUrl}`;
 
     const entryPoint = path.join(__dirname, "src", "remotion", "index.jsx");
 
@@ -493,13 +508,15 @@ if (!timedLyrics.length) {
       webpackOverride: (config) => config,
     });
 
+    const inputProps = {
+      lyrics: cleanLyrics,
+      songStyle: songStyle || "Sunday Morning Gospel",
+      audioUrl: fullAudioUrl,
+      timedLyrics,
+    };
+
     const compositions = await getCompositions(bundleLocation, {
-      inputProps: {
-        lyrics: cleanLyrics,
-        songStyle: songStyle || "Sunday Morning Gospel",
-        audioUrl: audioUrl || "",
-        timedLyrics,
-      },
+      inputProps,
     });
 
     const composition = compositions.find((c) => c.id === "ReceiptVideo");
@@ -523,12 +540,7 @@ if (!timedLyrics.length) {
       serveUrl: bundleLocation,
       codec: "h264",
       outputLocation,
-      inputProps: {
-        lyrics: cleanLyrics,
-        songStyle: songStyle || "Sunday Morning Gospel",
-        audioUrl: audioUrl || "",
-        timedLyrics,
-      },
+      inputProps,
     });
 
     res.json({
