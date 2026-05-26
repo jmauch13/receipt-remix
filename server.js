@@ -10,6 +10,10 @@ import serveStatic from "serve-static";
 import { bundle } from "@remotion/bundler";
 import { getCompositions, renderMedia } from "@remotion/renderer";
 import axios from "axios";
+import {
+  renderMediaOnLambda,
+  getRenderProgress,
+} from "@remotion/lambda/client";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -487,10 +491,9 @@ app.post("/api/render-video", async (req, res) => {
     const cleanLyrics = cleanLyricsForVideo(lyrics);
 
     const lastTimedLyric = timedLyrics[timedLyrics.length - 1];
-
-    const FPS = 24;
-    const calculatedDurationInFrames = Math.ceil((lastTimedLyric.end + 1.5) * FPS);
-      
+    const calculatedDurationInFrames = Math.ceil(
+      (lastTimedLyric.end + 1.5) * 24
+    );
 
     const BASE_URL =
       process.env.NODE_ENV === "production"
@@ -501,13 +504,6 @@ app.post("/api/render-video", async (req, res) => {
       ? audioUrl
       : `${BASE_URL}${audioUrl}`;
 
-    const entryPoint = path.join(__dirname, "src", "remotion", "index.jsx");
-
-    const bundleLocation = await bundle({
-      entryPoint,
-      webpackOverride: (config) => config,
-    });
-
     const inputProps = {
       lyrics: cleanLyrics,
       songStyle: songStyle || "Sunday Morning Gospel",
@@ -515,53 +511,67 @@ app.post("/api/render-video", async (req, res) => {
       timedLyrics,
     };
 
-    const compositions = await getCompositions(bundleLocation, {
+    console.log("Starting Lambda render...");
+
+    const { bucketName, renderId } = await renderMediaOnLambda({
+      region: process.env.REMOTION_AWS_REGION || "us-east-2",
+      functionName: process.env.REMOTION_FUNCTION_NAME,
+      serveUrl: process.env.REMOTION_SERVE_URL,
+      composition: "ReceiptVideo",
       inputProps,
+      codec: "h264",
+      framesPerLambda: 60,
+      maxRetries: 1,
+      privacy: "public",
+      timeoutInMilliseconds: 120000,
+      durationInFrames: calculatedDurationInFrames,
     });
 
-    const composition = compositions.find((c) => c.id === "ReceiptVideo");
+    let progress;
 
-    if (!composition) {
+    for (let i = 0; i < 120; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      progress = await getRenderProgress({
+        renderId,
+        bucketName,
+        functionName: process.env.REMOTION_FUNCTION_NAME,
+        region: process.env.REMOTION_AWS_REGION || "us-east-2",
+      });
+
+      console.log(
+        `Lambda render progress: ${Math.round((progress.overallProgress || 0) * 100)}%`
+      );
+
+      if (progress.fatalErrorEncountered) {
+        console.log("Lambda fatal error:", progress.errors);
+        return res.status(500).json({
+          error: "Lambda render failed",
+          details: progress.errors,
+        });
+      }
+
+      if (progress.done) {
+        break;
+      }
+    }
+
+    if (!progress?.done) {
       return res.status(500).json({
-        error: "ReceiptVideo composition not found",
+        error: "Lambda render timed out",
       });
     }
 
-    const renderComposition = {
-      ...composition,
-      durationInFrames: calculatedDurationInFrames,
-    };
-
-    const fileName = `receipt-remix-${Date.now()}.mp4`;
-    const outputLocation = path.join(rendersDir, fileName);
-
-    console.log("Starting video render...");
-
-await renderMedia({
-  composition: renderComposition,
-  serveUrl: bundleLocation,
-  codec: "h264",
-  outputLocation,
-  inputProps,
-  concurrency: 2,
-  crf: 28,
-  pixelFormat: "yuv420p",
-  onProgress: ({ progress }) => {
-    console.log(`Render progress: ${Math.round(progress * 100)}%`);
-  },
-});
-
-console.log("Video render finished:", outputLocation);
-
     res.json({
-      videoUrl: `/renders/${fileName}`,
+      videoUrl: progress.outputFile,
+      provider: "remotion-lambda",
     });
   } catch (error) {
-    console.error("Video render error:");
-    console.dir(error, { depth: null });
+    console.error("Lambda render error:");
+    console.dir(error?.response?.data || error, { depth: null });
 
     res.status(500).json({
-      error: "Failed to render video",
+      error: "Failed to render video with Lambda",
     });
   }
 });
