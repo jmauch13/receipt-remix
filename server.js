@@ -538,6 +538,8 @@ const timedBubbles = (timedLyrics || []).map((item) => {
   };
 });
 
+    const songDurationSeconds = Math.ceil(calculatedDurationInFrames / 30);
+
     const { bucketName, renderId } = await renderMediaOnLambda({
       region: process.env.REMOTION_AWS_REGION || "us-east-2",
       functionName: process.env.REMOTION_FUNCTION_NAME,
