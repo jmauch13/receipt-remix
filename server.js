@@ -488,9 +488,9 @@ app.post("/api/render-video", async (req, res) => {
 
     const lastTimedLyric = timedLyrics[timedLyrics.length - 1];
 
-    const calculatedDurationInFrames = Math.ceil(
-      (lastTimedLyric.end + 1.5) * 30
-    );
+    const FPS = 24;
+    const calculatedDurationInFrames = Math.ceil((lastTimedLyric.end + 1.5) * FPS);
+      
 
     const BASE_URL =
       process.env.NODE_ENV === "production"
@@ -543,7 +543,9 @@ await renderMedia({
   codec: "h264",
   outputLocation,
   inputProps,
-  concurrency: 1,
+  concurrency: 2,
+  crf: 28,
+  pixelFormat: "yuv420p",
   onProgress: ({ progress }) => {
     console.log(`Render progress: ${Math.round(progress * 100)}%`);
   },
