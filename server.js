@@ -421,11 +421,20 @@ app.post("/api/transcribe-song", async (req, res) => {
 
     const tempFile = path.join(rendersDir, `temp-${Date.now()}.mp3`);
 
-    const response = await axios({
-      method: "GET",
-      url: songUrl,
-      responseType: "stream",
-    });
+    const BASE_URL =
+  process.env.NODE_ENV === "production"
+    ? "https://receipt-remix.onrender.com"
+    : `http://localhost:${PORT}`;
+
+const fullSongUrl = songUrl.startsWith("http")
+  ? songUrl
+  : `${BASE_URL}${songUrl}`;
+
+const response = await axios({
+  method: "GET",
+  url: fullSongUrl,
+  responseType: "stream",
+});
 
     const writer = fs.createWriteStream(tempFile);
     response.data.pipe(writer);
