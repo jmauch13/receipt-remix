@@ -7,14 +7,8 @@ import {
   useVideoConfig,
 } from "remotion";
 
-function getSpeaker(line) {
-  const match = String(line || "").match(
-    /^(me|my|mine|i|you|them|they|friend|person \d+):\s*/i
-  );
-
-  if (!match) return "them";
-
-  const speaker = match[1].toLowerCase();
+function normalizeSpeaker(value) {
+  const speaker = String(value || "").toLowerCase().trim();
 
   if (["me", "my", "mine", "i", "you"].includes(speaker)) {
     return "me";
@@ -23,107 +17,101 @@ function getSpeaker(line) {
   return "them";
 }
 
+function getSpeakerFromText(line) {
+  const match = String(line || "").match(
+    /^(me|my|mine|i|you|them|they|friend|person \d+):\s*/i
+  );
+
+  if (!match) return "them";
+
+  return normalizeSpeaker(match[1]);
+}
+
 function cleanLine(line) {
   return String(line || "")
     .trim()
     .replace(/^(me|my|mine|i|you|them|they|friend|person \d+):\s*/i, "");
 }
 
-function groupLyricsBySpeaker(lines) {
-  const groups = [];
-
-  for (const rawLine of lines) {
-    const line = String(rawLine || "").trim();
-    if (!line) continue;
-
-    if (
-      /^(verse|chorus|bridge|final chorus|outro|hook|pre-chorus|intro)\b:?$/i.test(
-        line
-      )
-    ) {
-      continue;
-    }
-
-    const speaker = getSpeaker(line);
-    const text = cleanLine(line);
-
-    if (!text) continue;
-
-    const lastGroup = groups[groups.length - 1];
-
-    if (
-      lastGroup &&
-      lastGroup.speaker === speaker &&
-      lastGroup.lines.length < 2
-    ) {
-      lastGroup.lines.push(text);
-    } else {
-      groups.push({
-        speaker,
-        lines: [text],
-      });
-    }
-  }
-
-  return groups.map((group) => ({
-    speaker: group.speaker,
-    text: group.lines.join("\n"),
-  }));
+function isSectionLabel(line) {
+  return /^(verse|chorus|bridge|final chorus|outro|hook|pre-chorus|intro)\b:?$/i.test(
+    String(line || "").trim()
+  );
 }
 
-function buildScenes({ lyrics = [], timedLyrics = [], durationInFrames, fps }) {
-  const groupedScenes = groupLyricsBySpeaker(lyrics);
+function buildScenes({ lyrics = [], timedLyrics = [], bubbles = [], durationInFrames, fps }) {
+  // Best source: already-built bubble objects
+  const source = bubbles.length ? bubbles : timedLyrics.length ? timedLyrics : lyrics;
 
-  const safeScenes = groupedScenes.length
-    ? groupedScenes
+  const scenes = source
+    .map((item) => {
+      if (typeof item === "string") {
+        if (!item.trim() || isSectionLabel(item)) return null;
+
+        return {
+          speaker: getSpeakerFromText(item),
+          text: cleanLine(item),
+          start: null,
+          end: null,
+        };
+      }
+
+      const rawText = item.text || item.line || item.lyric || "";
+      if (!rawText.trim() || isSectionLabel(rawText)) return null;
+
+      return {
+        speaker: item.speaker
+          ? normalizeSpeaker(item.speaker)
+          : getSpeakerFromText(rawText),
+        text: cleanLine(rawText),
+        start: typeof item.start === "number" ? item.start : null,
+        end: typeof item.end === "number" ? item.end : null,
+      };
+    })
+    .filter(Boolean)
+    .filter((scene) => scene.text);
+
+  const safeScenes = scenes.length
+    ? scenes
     : [
-        { speaker: "them", text: "where are you" },
-        { speaker: "me", text: "with friends" },
+        { speaker: "them", text: "where are you", start: 0, end: 2 },
+        { speaker: "me", text: "with friends", start: 2, end: 4 },
       ];
 
-  const audioStart = timedLyrics[0]?.start || 0;
-  const audioEnd =
-    timedLyrics[timedLyrics.length - 1]?.end || durationInFrames / fps;
+  // If scenes already have timing, use it.
+  if (safeScenes.some((scene) => scene.start !== null && scene.end !== null)) {
+    return safeScenes.map((scene, index) => {
+      const fallbackStart = index * 2.5;
+      const fallbackEnd = fallbackStart + 2.5;
 
-  const totalFrames = Math.max(
+      return {
+        ...scene,
+        startFrame: Math.floor((scene.start ?? fallbackStart) * fps),
+        endFrame: Math.floor((scene.end ?? fallbackEnd) * fps),
+      };
+    });
+  }
+
+  // Fallback: evenly spread scenes across video.
+  const framesPerScene = Math.max(
     fps * 2,
-    Math.floor((audioEnd - audioStart) * fps)
+    Math.floor(durationInFrames / safeScenes.length)
   );
 
-  const totalCharacters = safeScenes.reduce(
-    (sum, scene) => sum + scene.text.length,
-    0
-  );
-
-  let runningFrame = Math.floor(audioStart * fps);
-
-  return safeScenes.map((scene, index) => {
-    const weight = totalCharacters
-      ? scene.text.length / totalCharacters
-      : 1 / safeScenes.length;
-
-    const sceneFrames =
+  return safeScenes.map((scene, index) => ({
+    ...scene,
+    startFrame: index * framesPerScene,
+    endFrame:
       index === safeScenes.length - 1
-        ? Math.max(fps, Math.floor(audioEnd * fps) - runningFrame)
-        : Math.max(fps * 1.2, Math.floor(totalFrames * weight));
-
-    const startFrame = runningFrame;
-    const endFrame = runningFrame + sceneFrames;
-
-    runningFrame = endFrame;
-
-    return {
-      text: scene.text,
-      speaker: scene.speaker,
-      startFrame,
-      endFrame,
-    };
-  });
+        ? durationInFrames
+        : (index + 1) * framesPerScene,
+  }));
 }
 
 export const ReceiptVideo = ({
   lyrics = [],
   timedLyrics = [],
+  bubbles = [],
   songStyle = "Receipt Remix",
   audioUrl = "",
 }) => {
@@ -133,6 +121,7 @@ export const ReceiptVideo = ({
   const scenes = buildScenes({
     lyrics,
     timedLyrics,
+    bubbles,
     durationInFrames,
     fps,
   });
@@ -141,18 +130,11 @@ export const ReceiptVideo = ({
     (scene) => frame >= scene.startFrame && frame < scene.endFrame
   );
 
-  const activeIndex =
-    foundIndex >= 0 ? foundIndex : Math.max(0, scenes.length - 1);
-
+  const activeIndex = foundIndex >= 0 ? foundIndex : Math.max(0, scenes.length - 1);
   const activeScene = scenes[activeIndex] || scenes[0];
 
   const activeLine = activeScene?.text || "";
   const sceneFrame = Math.max(0, frame - (activeScene?.startFrame || 0));
-  const sceneDuration = Math.max(
-    fps,
-    (activeScene?.endFrame || durationInFrames) - (activeScene?.startFrame || 0)
-  );
-
   const isRight = activeScene?.speaker === "me";
 
   const pop = spring({
@@ -175,7 +157,13 @@ export const ReceiptVideo = ({
   });
 
   const fontSize =
-    activeLine.length > 110 ? 38 : activeLine.length > 90 ? 44 : activeLine.length > 55 ? 54 : 66;
+    activeLine.length > 110
+      ? 38
+      : activeLine.length > 90
+      ? 44
+      : activeLine.length > 55
+      ? 54
+      : 66;
 
   return (
     <AbsoluteFill
@@ -242,7 +230,7 @@ export const ReceiptVideo = ({
             borderBottomRightRadius: isRight ? 12 : 46,
             borderBottomLeftRadius: isRight ? 46 : 12,
             background: isRight ? "#007AFF" : "#E5E5EA",
-            color: isRight ? "#ffffff" : "#000000",
+            color: isRight ? "#FFFFFF" : "#000000",
             fontSize,
             lineHeight: 1.08,
             fontWeight: 950,
@@ -253,29 +241,6 @@ export const ReceiptVideo = ({
         >
           {activeLine}
         </div>
-      </div>
-
-      <div
-        style={{
-          position: "absolute",
-          bottom: 92,
-          left: "50%",
-          transform: "translateX(-50%)",
-          display: "flex",
-          gap: 12,
-        }}
-      >
-        {scenes.slice(0, 8).map((_, index) => (
-          <div
-            key={index}
-            style={{
-              width: index === activeIndex ? 42 : 16,
-              height: 14,
-              borderRadius: 999,
-              background: index === activeIndex ? "#ff4fb8" : "#333344",
-            }}
-          />
-        ))}
       </div>
     </AbsoluteFill>
   );

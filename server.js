@@ -513,12 +513,42 @@ app.post("/api/render-video", async (req, res) => {
 
     console.log("Starting Lambda render...");
 
+    function getSpeaker(line) {
+  const match = String(line || "").match(/^(me|them|you|friend|person \d+):\s*/i);
+  if (!match) return "them";
+
+  const speaker = match[1].toLowerCase();
+  return ["me", "you"].includes(speaker) ? "me" : "them";
+}
+
+function cleanBubbleText(line) {
+  return String(line || "")
+    .replace(/^(me|them|you|friend|person \d+):\s*/i, "")
+    .trim();
+}
+
+const timedBubbles = (timedLyrics || []).map((item) => {
+  const rawText = item.text || item.line || item.lyric || "";
+
+  return {
+    speaker: item.speaker || getSpeaker(rawText),
+    text: cleanBubbleText(rawText),
+    start: item.start,
+    end: item.end,
+  };
+});
+
     const { bucketName, renderId } = await renderMediaOnLambda({
       region: process.env.REMOTION_AWS_REGION || "us-east-2",
       functionName: process.env.REMOTION_FUNCTION_NAME,
       serveUrl: process.env.REMOTION_SERVE_URL,
       composition: "ReceiptVideo",
-      inputProps,
+      inputProps: {
+      audioUrl: songUrl,
+      bubbles: timedBubbles,
+      durationSeconds: songDurationSeconds,
+      songStyle: songStyle || "Receipt Remix",
+    },
       codec: "h264",
       framesPerLambda: 60,
       maxRetries: 1,
