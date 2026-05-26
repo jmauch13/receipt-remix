@@ -544,7 +544,7 @@ const timedBubbles = (timedLyrics || []).map((item) => {
       serveUrl: process.env.REMOTION_SERVE_URL,
       composition: "ReceiptVideo",
       inputProps: {
-      audioUrl: songUrl,
+      audioUrl: fullAudioUrl,
       bubbles: timedBubbles,
       durationSeconds: songDurationSeconds,
       songStyle: songStyle || "Receipt Remix",
