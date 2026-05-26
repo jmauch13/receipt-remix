@@ -71,12 +71,7 @@ function buildScenes({ lyrics = [], timedLyrics = [], bubbles = [], durationInFr
     .filter(Boolean)
     .filter((scene) => scene.text);
 
-  const safeScenes = scenes.length
-    ? scenes
-    : [
-        { speaker: "them", text: "where are you", start: 0, end: 2 },
-        { speaker: "me", text: "with friends", start: 2, end: 4 },
-      ];
+  const safeScenes = scenes.length ? scenes : [];
 
   // If scenes already have timing, use it.
   if (safeScenes.some((scene) => scene.start !== null && scene.end !== null)) {

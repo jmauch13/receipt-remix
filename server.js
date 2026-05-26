@@ -540,6 +540,15 @@ const timedBubbles = (timedLyrics || []).map((item) => {
 
     const songDurationSeconds = Math.ceil(calculatedDurationInFrames / 30);
 
+    console.log(
+  "timedBubbles going into Remotion:",
+  JSON.stringify(timedBubbles, null, 2)
+);
+
+if (!timedBubbles || !timedBubbles.length) {
+  throw new Error("No timedBubbles found. Cannot render video without real lyric bubbles.");
+}
+
     const { bucketName, renderId } = await renderMediaOnLambda({
       region: process.env.REMOTION_AWS_REGION || "us-east-2",
       functionName: process.env.REMOTION_FUNCTION_NAME,
