@@ -178,10 +178,14 @@ async function transcribeSong(songUrlToUse) {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error || "Failed transcription");
+    throw new Error(data.error || "Failed to transcribe song");
   }
 
-  return data.segments || [];
+  return {
+    segments: data.segments || [],
+    words: data.words || [],
+    text: data.text || "",
+  };
 }
 
 async function renderVideo() {
