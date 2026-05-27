@@ -504,14 +504,18 @@ app.post("/api/generate-song", async (req, res) => {
 });
 
 app.post("/api/transcribe-song", async (req, res) => {
+  let tempFile;
+
   try {
+    console.log("Transcription route hit");
+
     const { songUrl } = req.body;
 
     if (!songUrl) {
       return res.status(400).json({ error: "Missing songUrl" });
     }
 
-    const tempFile = path.join(rendersDir, `temp-${Date.now()}.mp3`);
+    tempFile = path.join(rendersDir, `temp-${Date.now()}.mp3`);
 
     const BASE_URL =
       process.env.NODE_ENV === "production"
@@ -521,6 +525,8 @@ app.post("/api/transcribe-song", async (req, res) => {
     const fullSongUrl = songUrl.startsWith("http")
       ? songUrl
       : `${BASE_URL}${songUrl}`;
+
+    console.log("Downloading audio for transcription:", fullSongUrl);
 
     const response = await axios({
       method: "GET",
@@ -537,6 +543,8 @@ app.post("/api/transcribe-song", async (req, res) => {
       writer.on("error", reject);
     });
 
+    console.log("Audio downloaded. Starting OpenAI transcription...");
+
     const transcription = await openai.audio.transcriptions.create({
       file: fs.createReadStream(tempFile),
       model: "whisper-1",
@@ -544,20 +552,30 @@ app.post("/api/transcribe-song", async (req, res) => {
       timestamp_granularities: ["word"],
     });
 
-    fs.unlinkSync(tempFile);
+    console.log("OpenAI transcription complete.");
+    console.log("Words found:", transcription.words?.length || 0);
+    console.log("Segments found:", transcription.segments?.length || 0);
+
+    if (fs.existsSync(tempFile)) {
+      fs.unlinkSync(tempFile);
+    }
 
     res.json({
-    segments: transcription.segments || [],
-    words: transcription.words || [],
-    text: transcription.text || "",
-  });
-
+      segments: transcription.segments || [],
+      words: transcription.words || [],
+      text: transcription.text || "",
+    });
   } catch (error) {
     console.error("Transcription error:");
-    console.dir(error, { depth: null });
+    console.dir(error?.response?.data || error, { depth: null });
+
+    if (tempFile && fs.existsSync(tempFile)) {
+      fs.unlinkSync(tempFile);
+    }
 
     res.status(500).json({
       error: "Failed to transcribe song",
+      details: error?.message || "Unknown transcription error",
     });
   }
 });
