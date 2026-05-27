@@ -561,10 +561,21 @@ app.post("/api/transcribe-song", async (req, res) => {
     }
 
     res.json({
-      segments: transcription.segments || [],
-      words: transcription.words || [],
-      text: transcription.text || "",
-    });
+  segments:
+    transcription.segments && transcription.segments.length
+      ? transcription.segments
+      : [
+          {
+            start: 0,
+            end:
+              transcription.words?.[transcription.words.length - 1]?.end || 30,
+            text: transcription.text || "",
+          },
+        ],
+
+  words: transcription.words || [],
+  text: transcription.text || "",
+});
   } catch (error) {
     console.error("Transcription error:");
     console.dir(error?.response?.data || error, { depth: null });
