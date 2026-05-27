@@ -299,6 +299,18 @@ Rules:
 - If not, use "Me:" and "Them:" based on bubble position when obvious.
 - If unsure who said a line, just write the message without guessing.
 - Output only the extracted conversation.
+- Convert texting abbreviations into singable words:
+  - lol → laugh out loud
+  - lmao → laugh my ass off
+  - idk → I don't know
+  - mf → motherfucker
+  - wtf → what the fuck
+  - omg → oh my god
+  - rn → right now
+  - bc → because
+  - u → you
+  - ur → your
+- Always expand common texting abbreviations into natural sung language before writing the lyrics.
 `,
       input: [
         {
@@ -529,15 +541,17 @@ app.post("/api/transcribe-song", async (req, res) => {
       file: fs.createReadStream(tempFile),
       model: "whisper-1",
       response_format: "verbose_json",
-      timestamp_granularities: ["segment"],
+      timestamp_granularities: ["word"],
     });
 
     fs.unlinkSync(tempFile);
 
     res.json({
-      segments: transcription.segments || [],
-      text: transcription.text || "",
-    });
+    segments: transcription.segments || [],
+    words: transcription.words || [],
+    text: transcription.text || "",
+  });
+
   } catch (error) {
     console.error("Transcription error:");
     console.dir(error, { depth: null });

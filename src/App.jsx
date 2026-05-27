@@ -41,6 +41,7 @@ export default function App() {
   const [isRenderingVideo, setIsRenderingVideo] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
   const [timedLyrics, setTimedLyrics] = useState([]);
+  const [words, setWords] = useState([]);
 
   const currentStep = steps[stepIndex];
 
@@ -151,8 +152,10 @@ async function generateSongPlaceholder() {
 
     setSongUrl(data.songUrl);
 
-    const segments = await transcribeSong(data.songUrl);
-    setTimedLyrics(segments);
+    const transcriptionData = await transcribeSong(data.songUrl);
+
+setTimedLyrics(transcriptionData.segments || []);
+setWords(transcriptionData.words || []);
   } catch (error) {
     console.error(error);
     alert("Could not generate song.");
@@ -187,17 +190,18 @@ async function renderVideo() {
     setVideoUrl("");
 
     const response = await fetch("/api/render-video", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-      lyrics,
-      songStyle,
-      audioUrl: songUrl,
-      timedLyrics,
-    }),
-    });
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    lyrics,
+    songStyle,
+    audioUrl: songUrl,
+    timedLyrics,
+    words,
+  }),
+});
 
     const data = await response.json();
 
