@@ -7,8 +7,6 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import serveStatic from "serve-static";
-import { bundle } from "@remotion/bundler";
-import { getCompositions, renderMedia } from "@remotion/renderer";
 import axios from "axios";
 import {
   renderMediaOnLambda,
@@ -17,6 +15,7 @@ import {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const FPS = 30;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,15 +41,123 @@ const upload = multer({
   },
 });
 
-function cleanLyricsForVideo(lyrics) {
-  return lyrics
+function isSectionLabel(line) {
+  return /^(verse|chorus|bridge|final chorus|outro|hook|pre-chorus|intro)\b:?$/i.test(
+    String(line || "").trim()
+  );
+}
+
+function getSpeaker(line) {
+  const match = String(line || "").match(
+    /^(me|my|mine|i|you|them|they|friend|person \d+):\s*/i
+  );
+
+  if (!match) return "them";
+
+  const speaker = match[1].toLowerCase();
+
+  if (["me", "my", "mine", "i", "you"].includes(speaker)) {
+    return "me";
+  }
+
+  return "them";
+}
+
+function cleanBubbleText(line) {
+  return String(line || "")
+    .replace(/^(me|my|mine|i|you|them|they|friend|person \d+):\s*/i, "")
+    .trim();
+}
+
+function stripSpeakerLabels(rawLyrics) {
+  return String(rawLyrics || "")
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
-    .filter((line) => !/^(verse|chorus|bridge|final chorus|outro|hook|pre-chorus|intro)\b:?$/i.test(line))
-    .map((line) => line.replace(/^(me|them|friend|you|person \d+):\s*/i, ""))
+    .filter((line) => !isSectionLabel(line))
+    .map((line) =>
+      line.replace(/^(me|my|mine|i|you|them|they|friend|person \d+):\s*/i, "")
+    )
     .filter(Boolean)
-    .slice(0, 40);
+    .join("\n");
+}
+
+function parseCleanLyricsToBubbles(rawLyrics) {
+  const lines = String(rawLyrics || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !isSectionLabel(line));
+
+  const bubbles = [];
+
+  for (const line of lines) {
+    const speaker = getSpeaker(line);
+    const text = cleanBubbleText(line);
+
+    if (!text) continue;
+
+    const lastBubble = bubbles[bubbles.length - 1];
+
+    if (
+      lastBubble &&
+      lastBubble.speaker === speaker &&
+      lastBubble.lineCount < 2
+    ) {
+      lastBubble.text += `\n${text}`;
+      lastBubble.lineCount += 1;
+    } else {
+      bubbles.push({
+        speaker,
+        text,
+        lineCount: 1,
+      });
+    }
+  }
+
+  return bubbles.map(({ lineCount, ...bubble }) => bubble);
+}
+
+function addSimpleTimingToBubbles(bubbles, timedLyrics = []) {
+  const lastTimedLyric = timedLyrics[timedLyrics.length - 1];
+
+  const transcriptDuration =
+    typeof lastTimedLyric?.end === "number" ? lastTimedLyric.end : 0;
+
+  const estimatedDuration = Math.max(
+    transcriptDuration,
+    bubbles.length * 3.5,
+    30
+  );
+
+  const totalCharacters = bubbles.reduce(
+    (sum, bubble) => sum + bubble.text.length,
+    0
+  );
+
+  let currentTime = 0;
+
+  return bubbles.map((bubble, index) => {
+    const weight = totalCharacters
+      ? bubble.text.length / totalCharacters
+      : 1 / bubbles.length;
+
+    const bubbleDuration =
+      index === bubbles.length - 1
+        ? Math.max(2.2, estimatedDuration - currentTime)
+        : Math.max(2.2, estimatedDuration * weight);
+
+    const start = currentTime;
+    const end = currentTime + bubbleDuration;
+
+    currentTime = end;
+
+    return {
+      ...bubble,
+      start,
+      end,
+    };
+  });
 }
 
 function getStylePrompt(songStyle) {
@@ -59,7 +166,7 @@ function getStylePrompt(songStyle) {
   switch (songStyle) {
     case "Sunday Morning Gospel":
       stylePrompt =
-        "upbeat Black church gospel choir, Sunday morning praise break, full gospel choir call and response, Hammond B3 organ, tambourine, hand claps, energetic drums, soulful lead vocalist, joyful church service, choir shouting responses, celebratory and full of spirit, NOT sad, NOT slow, NOT piano ballad, NOT musical theater";
+        "upbeat Black church gospel choir, Sunday morning praise break, full gospel choir call and response, Hammond B3 organ, tambourine, hand claps, energetic drums, soulful lead vocalist, joyful church service, choir shouting responses, celebratory and full of spirit, not sad, not slow, not piano ballad, not musical theater";
       break;
 
     case "Late Night Blues":
@@ -98,7 +205,7 @@ function getStylePrompt(songStyle) {
   }
 
   stylePrompt +=
-    ", use only the provided lyrics, do not add new lyrics, do not sing instructions, do not invent a chorus, end immediately after the final lyric, keep the song short and proportional to the lyrics";
+    ", use only the provided lyrics, do not add new lyrics, do not invent a chorus, keep pacing energetic, keep intro brief, keep ending brief, finish after the final lyric";
 
   return stylePrompt;
 }
@@ -129,21 +236,8 @@ IMPORTANT:
 - Pauses like "..." are GOOD.
 - Output should feel like a real text conversation being sung.
 - Expand common texting abbreviations into natural sung language.
-- Examples:
-  - bc → because
-  - idk → I don't know
-  - lmao → laugh my ass off
-  - omg → oh my god
-  - rn → right now
-  - imma → I'm gonna
-  - u → you
-  - ur → your
 - Do not write emoji names like "laugh cry", "skull emoji", or "heart eyes".
 - Either remove emojis or translate the emotion naturally.
-- Examples:
-  - 😂 → laughing / that’s funny / leave it out if not needed
-  - 😭 → crying / I’m crying / leave it out if not needed
-  - 💀 → I’m dead / leave it out if not needed
 - Never spell out emojis literally.
 - Keep the tone casual and conversational.
 - Do NOT sound overly formal.
@@ -180,13 +274,15 @@ ${texts}
 app.post("/api/extract-texts", upload.array("screenshots", 5), async (req, res) => {
   try {
     if (!req.files || !req.files.length) {
-  return res.status(400).json({ error: "No screenshots uploaded" });
-}
+      return res.status(400).json({ error: "No screenshots uploaded" });
+    }
 
-const imageContent = req.files.map((file, index) => ({
-  type: "input_image",
-  image_url: `data:${file.mimetype};base64,${file.buffer.toString("base64")}`,
-}));
+    const imageContent = req.files.map((file) => ({
+      type: "input_image",
+      image_url: `data:${file.mimetype};base64,${file.buffer.toString(
+        "base64"
+      )}`,
+    }));
 
     const response = await openai.responses.create({
       model: "gpt-5.2",
@@ -208,12 +304,12 @@ Rules:
         {
           role: "user",
           content: [
-  {
-    type: "input_text",
-    text: "Extract the text message conversation from these screenshots in order. Combine them into one clean conversation.",
-  },
-  ...imageContent,
-],
+            {
+              type: "input_text",
+              text: "Extract the text message conversation from these screenshots in order. Combine them into one clean conversation.",
+            },
+            ...imageContent,
+          ],
         },
       ],
     });
@@ -239,49 +335,26 @@ app.post("/api/generate-song", async (req, res) => {
       });
     }
 
-    function stripSpeakerLabels(rawLyrics) {
-      return rawLyrics
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .filter(
-          (line) =>
-            !/^(verse|chorus|bridge|final chorus|outro|hook|pre-chorus|intro)\b:?$/i.test(
-              line
-            )
-        )
-        .map((line) =>
-          line.replace(/^(me|them|friend|you|person \d+):\s*/i, "")
-        )
-        .join("\n");
-    }
+    const lyricsForSong = stripSpeakerLabels(lyrics);
+    const stylePrompt = getStylePrompt(songStyle);
 
-    const cleanLyrics = stripSpeakerLabels(lyrics);
-
-    let stylePrompt = getStylePrompt(songStyle);
-
-    stylePrompt += `
-Fast pacing.
-Energetic vocal delivery.
-Do not stretch short lyrics.
-No long intros.
-No long outros.
-No extended instrumental breaks.
-No repeating lyrics unless naturally catchy.
-Song should end naturally after the final lyric.
-`;
-
-    const lineCount = cleanLyrics
+    const lineCount = lyricsForSong
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean).length;
 
     const targetDuration = Math.min(75, Math.max(18, lineCount * 3.5));
 
+    console.log("Lyrics being sent to Kie:");
+    console.log(lyricsForSong);
+
+    console.log("Style being sent to Kie:");
+    console.log(stylePrompt);
+
     const createResponse = await axios.post(
       "https://api.kie.ai/api/v1/generate",
       {
-        prompt: cleanLyrics,
+        prompt: lyricsForSong,
         style: stylePrompt,
         title: "Receipt Remix",
         customMode: true,
@@ -295,6 +368,7 @@ Song should end naturally after the final lyric.
           Authorization: `Bearer ${process.env.KIE_API_KEY}`,
           "Content-Type": "application/json",
         },
+        timeout: 60000,
       }
     );
 
@@ -321,6 +395,7 @@ Song should end naturally after the final lyric.
           headers: {
             Authorization: `Bearer ${process.env.KIE_API_KEY}`,
           },
+          timeout: 60000,
         }
       );
 
@@ -392,6 +467,7 @@ Song should end naturally after the final lyric.
       method: "GET",
       url: remoteAudioUrl,
       responseType: "arraybuffer",
+      timeout: 120000,
     });
 
     const filename = `song-${Date.now()}.mp3`;
@@ -426,19 +502,20 @@ app.post("/api/transcribe-song", async (req, res) => {
     const tempFile = path.join(rendersDir, `temp-${Date.now()}.mp3`);
 
     const BASE_URL =
-  process.env.NODE_ENV === "production"
-    ? "https://receipt-remix.onrender.com"
-    : `http://localhost:${PORT}`;
+      process.env.NODE_ENV === "production"
+        ? "https://receipt-remix.onrender.com"
+        : `http://localhost:${PORT}`;
 
-const fullSongUrl = songUrl.startsWith("http")
-  ? songUrl
-  : `${BASE_URL}${songUrl}`;
+    const fullSongUrl = songUrl.startsWith("http")
+      ? songUrl
+      : `${BASE_URL}${songUrl}`;
 
-const response = await axios({
-  method: "GET",
-  url: fullSongUrl,
-  responseType: "stream",
-});
+    const response = await axios({
+      method: "GET",
+      url: fullSongUrl,
+      responseType: "stream",
+      timeout: 120000,
+    });
 
     const writer = fs.createWriteStream(tempFile);
     response.data.pipe(writer);
@@ -459,6 +536,7 @@ const response = await axios({
 
     res.json({
       segments: transcription.segments || [],
+      text: transcription.text || "",
     });
   } catch (error) {
     console.error("Transcription error:");
@@ -482,18 +560,24 @@ app.post("/api/render-video", async (req, res) => {
       return res.status(400).json({ error: "Missing audioUrl" });
     }
 
-    if (!timedLyrics.length) {
+    const rawBubbles = parseCleanLyricsToBubbles(lyrics);
+
+    if (!rawBubbles.length) {
       return res.status(400).json({
-        error: "Missing timed lyrics. Generate and transcribe the song first.",
+        error: "No real lyric bubbles found from the provided lyrics.",
       });
     }
 
-    const cleanLyrics = cleanLyricsForVideo(lyrics);
+    const timedBubbles = addSimpleTimingToBubbles(rawBubbles, timedLyrics);
 
-    const lastTimedLyric = timedLyrics[timedLyrics.length - 1];
-    const calculatedDurationInFrames = Math.ceil(
-      (lastTimedLyric.end + 1.5) * 24
+    const lastBubble = timedBubbles[timedBubbles.length - 1];
+
+    const songDurationSeconds = Math.max(
+      Math.ceil(lastBubble?.end || 30),
+      30
     );
+
+    const calculatedDurationInFrames = Math.ceil(songDurationSeconds * FPS);
 
     const BASE_URL =
       process.env.NODE_ENV === "production"
@@ -504,50 +588,13 @@ app.post("/api/render-video", async (req, res) => {
       ? audioUrl
       : `${BASE_URL}${audioUrl}`;
 
-    const inputProps = {
-      lyrics: cleanLyrics,
-      songStyle: songStyle || "Sunday Morning Gospel",
-      audioUrl: fullAudioUrl,
-      timedLyrics,
-    };
-
-    console.log("Starting Lambda render...");
-
-    function getSpeaker(line) {
-  const match = String(line || "").match(/^(me|them|you|friend|person \d+):\s*/i);
-  if (!match) return "them";
-
-  const speaker = match[1].toLowerCase();
-  return ["me", "you"].includes(speaker) ? "me" : "them";
-}
-
-function cleanBubbleText(line) {
-  return String(line || "")
-    .replace(/^(me|them|you|friend|person \d+):\s*/i, "")
-    .trim();
-}
-
-const timedBubbles = (timedLyrics || []).map((item) => {
-  const rawText = item.text || item.line || item.lyric || "";
-
-  return {
-    speaker: item.speaker || getSpeaker(rawText),
-    text: cleanBubbleText(rawText),
-    start: item.start,
-    end: item.end,
-  };
-});
-
-    const songDurationSeconds = Math.ceil(calculatedDurationInFrames / 30);
-
     console.log(
-  "timedBubbles going into Remotion:",
-  JSON.stringify(timedBubbles, null, 2)
-);
+      "timedBubbles going into Remotion:",
+      JSON.stringify(timedBubbles, null, 2)
+    );
 
-if (!timedBubbles || !timedBubbles.length) {
-  throw new Error("No timedBubbles found. Cannot render video without real lyric bubbles.");
-}
+    console.log("Calculated duration seconds:", songDurationSeconds);
+    console.log("Calculated duration frames:", calculatedDurationInFrames);
 
     const { bucketName, renderId } = await renderMediaOnLambda({
       region: process.env.REMOTION_AWS_REGION || "us-east-2",
@@ -555,11 +602,11 @@ if (!timedBubbles || !timedBubbles.length) {
       serveUrl: process.env.REMOTION_SERVE_URL,
       composition: "ReceiptVideo",
       inputProps: {
-      audioUrl: fullAudioUrl,
-      bubbles: timedBubbles,
-      durationSeconds: songDurationSeconds,
-      songStyle: songStyle || "Receipt Remix",
-    },
+        audioUrl: fullAudioUrl,
+        bubbles: timedBubbles,
+        durationSeconds: songDurationSeconds,
+        songStyle: songStyle || "Receipt Remix",
+      },
       codec: "h264",
       framesPerLambda: 60,
       maxRetries: 1,
@@ -581,7 +628,9 @@ if (!timedBubbles || !timedBubbles.length) {
       });
 
       console.log(
-        `Lambda render progress: ${Math.round((progress.overallProgress || 0) * 100)}%`
+        `Lambda render progress: ${Math.round(
+          (progress.overallProgress || 0) * 100
+        )}%`
       );
 
       if (progress.fatalErrorEncountered) {
